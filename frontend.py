@@ -1,5 +1,6 @@
 import streamlit as st
 import requests
+import json
 
 user_input = st.text_area(
     "Enter your learning interests, goals, and current knowledge:",
@@ -14,6 +15,7 @@ if st.button("Get Recommendations"):
         response = requests.post(backend_url, json=data)
         response.raise_for_status()  # Raise an exception for bad status codes
         recommendations = response.json()
+        st.write("Full Response:", json.dumps(recommendations, indent=4))  # Print the full response for inspection
         st.subheader("Recommended Learning Resources:")
 
         # Access the list of recommendations correctly
