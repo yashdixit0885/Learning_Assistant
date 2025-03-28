@@ -15,13 +15,15 @@ if st.button("Get Recommendations"):
         response = requests.post(backend_url, json=data)
         response.raise_for_status()  # Raise an exception for bad status codes
         recommendations = response.json()
-        st.write("Full Response:", json.dumps(recommendations, indent=4))  # Print the full response for inspection
+        # st.write("Full Response:", json.dumps(recommendations, indent=4))  # Print the full response for inspection
         st.subheader("Recommended Learning Resources:")
 
         # Access the list of recommendations correctly
-        if "recommendations" in recommendations:
-            for recommendation in recommendations["recommendations"]:
-                st.write(recommendation)
+        if "recommendations" in recommendations and "tasks_output" in recommendations["recommendations"]:
+            for task_output in recommendations["recommendations"]["tasks_output"]:
+                if task_output["agent"] == "Learning Path Recommendation Specialist":
+                    # Access the raw output of the recommendation agent
+                    st.write(task_output["raw"])
         else:
             st.error("No recommendations found in the response.")
 
