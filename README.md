@@ -37,7 +37,7 @@ The application uses the following AI agents:
 
 To use the application, send a POST request to the `/recommendations/` endpoint with a JSON body containing the user's input:
 
-```json
+json
 {
   "user_input": "I want to learn Python for data science. I'm a beginner."
 }
@@ -76,7 +76,7 @@ Receives user input and returns learning resource recommendations.
 
 **Request Body:**
 
-```json
+json
 {
   "user_input": "string"  // User's learning interests, goals, and current knowledge.
 }
