@@ -14,7 +14,7 @@ from crewai_tools import SerperDevTool
 from crewai import LLM
 
 llm = LLM(
-    model="gemini/gemini-2.0-flash-lite",
+    model="gemini/gemini-2.0-flash",
     temperature=0.7,
     max_tokens=1000,
 )
