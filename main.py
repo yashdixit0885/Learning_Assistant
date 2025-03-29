@@ -90,29 +90,41 @@ async def get_learning_recommendations(data: UserInput):
             logger.error(f"Error during crew execution: {str(e)}")
             raise HTTPException(status_code=500, detail=f"Error during processing: {str(e)}")
 
+        
         # Process recommendations
         recommendations_output = None
         for task in learning_crew.tasks:
             if task.description.startswith("Create JSON array"):
-                recommendations_output = task.output
+                recommendations_output = task.output.result if hasattr(task.output, 'result') else str(task.output)
                 break
 
         if not recommendations_output:
             raise HTTPException(status_code=404, detail="No recommendations generated")
 
         try:
-            structured_recommendations = json.loads(recommendations_output)
+            # Convert string output to JSON if needed
+            if isinstance(recommendations_output, str):
+                structured_recommendations = json.loads(recommendations_output)
+            else:
+                structured_recommendations = recommendations_output
+
             if not isinstance(structured_recommendations, list):
                 structured_recommendations = [structured_recommendations]
-        except json.JSONDecodeError:
-            raise HTTPException(status_code=500, detail="Invalid JSON format in recommendations")
 
-        return RecommendationsResponse(recommendations=structured_recommendations)
+            # Add debug logging
+            logger.info(f"Structured recommendations: {json.dumps(structured_recommendations)}")
+
+            return RecommendationsResponse(recommendations=structured_recommendations)
+
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON parsing error: {str(e)}")
+            logger.error(f"Raw output: {recommendations_output}")
+            raise HTTPException(status_code=500, detail="Invalid JSON format in recommendations")
 
     except Exception as e:
         logger.error(f"Error processing request: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
-
+    
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
