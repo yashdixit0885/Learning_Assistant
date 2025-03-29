@@ -47,7 +47,6 @@ if st.button("Get Recommendations"):
                             if title and link:
                                 st.subheader(title)
                                 st.write(f"**Description:** {description}")
-                                print("\n")
                                 st.write(f"**Link:** [{link}]({link})") # Create a clickable link
                                 if rating:
                                     st.write(f"**Rating:** {rating}")
