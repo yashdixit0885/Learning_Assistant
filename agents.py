@@ -149,6 +149,6 @@ class LearningAgents():
             Prioritize the highest-rated resources and present them as a valid JSON array of dictionaries. Each dictionary should have the keys: "title", "description", "link", "rating", "justification".
             """,
             agent=self.recommendation_agent(),
-            expected_output="A valid JSON array of recommended learning resources.",
+            expected_output="A prioritized list of recommended learning resources in a structured JSON format.",
         )
 
