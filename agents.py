@@ -146,9 +146,9 @@ class LearningAgents():
         return Task(
             description=f"""
             Compile a personalized list of learning resources based on the following evaluated resources: '{evaluated_resources}'.
-            Prioritize the highest-rated resources and present them as a JSON-like structure (list of dictionaries) with keys: "title", "description", "link", "rating", "justification".
+            Prioritize the highest-rated resources and present them as a valid JSON array of dictionaries. Each dictionary should have the keys: "title", "description", "link", "rating", "justification".
             """,
             agent=self.recommendation_agent(),
-            expected_output="A JSON-like list of recommended learning resources.",
+            expected_output="A valid JSON array of recommended learning resources.",
         )
 

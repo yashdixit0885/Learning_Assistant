@@ -39,33 +39,37 @@ async def get_learning_recommendations(user_input: str = Body(embed=True)):
     # Run the crew
     result = learning_crew.kickoff()
 
-    # Find the output of the recommendation task
+    # ... inside the get_learning_recommendations function
+    result = learning_crew.kickoff()
+
+# Find the output of the recommendation task
     recommendations_output = None
     for task in learning_crew.tasks:
         if task.description.startswith("Compile a personalized list of learning resources"):
             recommendations_output = task.output
             break
 
-    # Process the raw output into a structured format
+    print(f"Raw recommendations_output: {recommendations_output}") # Keep this for debugging
+
     structured_recommendations = []
     if recommendations_output:
-        resources = recommendations_output.split("\n\n")
-        for resource in resources:
-            if resource.strip():
-                lines = resource.split("\n")
-                recommendation = {}
-                for line in lines:
-                    if line.startswith(("1.", "2.", "3.", "4.", "5.")):
-                        recommendation['title'] = line.split(".", 1)[1].strip()
-                    elif line.strip().startswith("* Description:"):
-                        recommendation['description'] = line.split(":", 1)[1].strip()
-                    elif line.strip().startswith("* Link:"):
-                        recommendation['link'] = line.split(":", 1)[1].strip()
-                    elif line.strip().startswith("* Rating:"):
-                        recommendation['rating'] = line.split(":", 1)[1].strip()
-                    elif line.strip().startswith("* Justification:"):
-                        recommendation['justification'] = line.split(":", 1)[1].strip()
-                if recommendation.get('title') and recommendation.get('link'):
-                    structured_recommendations.append(recommendation)
+        try:
+            structured_recommendations = json.loads(recommendations_output)
+            if not isinstance(structured_recommendations, list):
+                print("Warning: Recommendation agent output was not a JSON list.")
+                # Fallback to the old parsing logic if needed
+                structured_recommendations = []
+                resources = recommendations_output.split("\n\n")
+                for resource in resources:
+                    # ... (your existing parsing logic)
+                    pass
+        except json.JSONDecodeError as e:
+            print(f"Error decoding JSON from recommendation agent: {e}")
+            # Fallback to the old parsing logic
+            structured_recommendations = []
+            resources = recommendations_output.split("\n\n")
+            for resource in resources:
+                # ... (your existing parsing logic)
+                pass
 
     return {"recommendations": structured_recommendations}
