@@ -24,6 +24,36 @@ user_input = st.text_area(
     height=150
 )
 
+def display_resource(idx, resource):
+    """Helper function to display a single resource"""
+    with st.container():
+        col1, col2 = st.columns([3, 1])
+        
+        with col1:
+            st.markdown(f"### {idx}. {resource.get('title', 'Untitled')}")
+            
+            # Display description without JSON formatting
+            description = resource.get('description', 'No description available')
+            if description.startswith('```json'):
+                description = "No description available"
+            st.markdown(f"**Description:** {description}")
+            
+            if link := resource.get('link'):
+                st.markdown(f"**Link:** [{link}]({link})")
+            
+            if justification := resource.get('justification'):
+                with st.expander("Why this resource?"):
+                    st.write(justification)
+        
+        with col2:
+            if rating := resource.get('rating'):
+                if isinstance(rating, (int, float)):
+                    st.info(f"Rating: {'⭐' * int(rating)}")
+                else:
+                    st.info(f"Rating: {rating}")
+        
+        st.markdown("---")
+
 # Process button
 if st.button("Get Recommendations", type="primary"):
     if not user_input.strip():
@@ -51,27 +81,30 @@ if st.button("Get Recommendations", type="primary"):
                 st.success("✨ Found relevant learning resources for you!")
                 
                 for idx, resource in enumerate(recommendations["recommendations"], 1):
-                    with st.container():
-                        col1, col2 = st.columns([3, 1])
-                        
-                        with col1:
-                            st.markdown(f"### {idx}. {resource.get('title', 'Untitled')}")
-                            st.markdown(f"**Description:** {resource.get('description', 'No description available')}")
+                    try:
+                        # Get description and clean it up
+                        description = resource.get('description', '')
+                        if description.startswith('```json'):
+                            # Extract JSON content between backticks and clean it
+                            json_str = description.split('```json')[1].split('```')[0].strip()
+                            # Clean up any potential formatting issues
+                            json_str = json_str.replace('\n', ' ').replace('\r', '')
+                            parsed_resources = json.loads(json_str)
                             
-                            if link := resource.get('link'):
-                                st.markdown(f"**Link:** [{link}]({link})")
+                            if isinstance(parsed_resources, list):
+                                for parsed_idx, parsed_resource in enumerate(parsed_resources, idx):
+                                    display_resource(parsed_idx, parsed_resource)
+                            else:
+                                display_resource(idx, parsed_resources)
+                        else:
+                            display_resource(idx, resource)
                             
-                            if justification := resource.get('justification'):
-                                with st.expander("Why this resource?"):
-                                    st.write(justification)
-                        
-                        with col2:
-                            if rating := resource.get('rating'):
-                                st.info(f"Rating: {rating}")
-                        
-                        st.markdown("---")
-            else:
-                st.warning("No recommendations found. Please try again with more specific interests.")
+                    except json.JSONDecodeError as e:
+                        st.warning(f"Could not parse recommendation {idx}. Displaying as plain text.")
+                        display_resource(idx, resource)
+                    except Exception as e:
+                        st.error(f"Error processing recommendation {idx}: {str(e)}")
+                        continue
 
         except requests.Timeout:
             st.error("⏱️ Request timed out. Please try again.")
@@ -81,6 +114,8 @@ if st.button("Get Recommendations", type="primary"):
         except Exception as e:
             st.error(f"❌ Unexpected error: {str(e)}")
             st.info("Please try again or contact support if the issue persists.")
+
+
 
 # Footer
 st.markdown("---")

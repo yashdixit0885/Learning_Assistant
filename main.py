@@ -91,39 +91,97 @@ async def get_learning_recommendations(data: UserInput):
             raise HTTPException(status_code=500, detail=f"Error during processing: {str(e)}")
 
         
-        # Process recommendations
+                # Process recommendations with enhanced logging
         recommendations_output = None
-        for task in learning_crew.tasks:
-            if task.description.startswith("Create JSON array"):
-                recommendations_output = task.output.result if hasattr(task.output, 'result') else str(task.output)
-                break
-
-        if not recommendations_output:
-            raise HTTPException(status_code=404, detail="No recommendations generated")
-
         try:
-            # Convert string output to JSON if needed
-            if isinstance(recommendations_output, str):
-                structured_recommendations = json.loads(recommendations_output)
-            else:
-                structured_recommendations = recommendations_output
+            for task in learning_crew.tasks:
+                if task.description.startswith("Create JSON array"):
+                    logger.info(f"Found recommendation task: {task.description}")
+                    
+                    # Get the raw output
+                    raw_output = task.output
+                    logger.info(f"Raw output type: {type(raw_output)}")
+                    
+                    # Convert raw output to structured recommendations
+                    if isinstance(raw_output, str):
+                        # Try to parse if it's a JSON string
+                        try:
+                            structured_recommendations = json.loads(raw_output)
+                        except json.JSONDecodeError:
+                            # If not valid JSON, try to parse the text format
+                            recommendations = []
+                            current_rec = {}
+                            
+                            for line in raw_output.split('\n'):
+                                line = line.strip()
+                                if line.startswith('Title:'):
+                                    if current_rec:
+                                        recommendations.append(current_rec)
+                                    current_rec = {'title': line[6:].strip()}
+                                elif line.startswith('Description:'):
+                                    current_rec['description'] = line[12:].strip()
+                                elif line.startswith('Link:'):
+                                    current_rec['link'] = line[5:].strip()
+                                elif line.startswith('Rating:'):
+                                    current_rec['rating'] = line[7:].strip()
+                                elif line.startswith('Justification:'):
+                                    current_rec['justification'] = line[14:].strip()
+                            
+                            if current_rec:
+                                recommendations.append(current_rec)
+                            
+                            structured_recommendations = recommendations
+                    
+                    elif isinstance(raw_output, dict):
+                        structured_recommendations = [raw_output]
+                    elif isinstance(raw_output, list):
+                        structured_recommendations = raw_output
+                    else:
+                        # If output is neither string nor dict/list, create a basic recommendation
+                        structured_recommendations = [{
+                            'title': 'Generated Recommendation',
+                            'description': str(raw_output),
+                            'link': '',
+                            'rating': '',
+                            'justification': 'Generated from raw output'
+                        }]
 
-            if not isinstance(structured_recommendations, list):
-                structured_recommendations = [structured_recommendations]
+                    # Validate and clean recommendations
+                    validated_recommendations = []
+                    for rec in structured_recommendations:
+                        if isinstance(rec, dict):
+                            validated_rec = {
+                                'title': rec.get('title', 'Untitled'),
+                                'description': rec.get('description', ''),
+                                'link': rec.get('link', ''),
+                                'rating': rec.get('rating', ''),
+                                'justification': rec.get('justification', '')
+                            }
+                            validated_recommendations.append(validated_rec)
 
-            # Add debug logging
-            logger.info(f"Structured recommendations: {json.dumps(structured_recommendations)}")
+                    if not validated_recommendations:
+                        raise ValueError("No valid recommendations could be extracted")
 
-            return RecommendationsResponse(recommendations=structured_recommendations)
+                    return RecommendationsResponse(recommendations=validated_recommendations)
 
-        except json.JSONDecodeError as e:
-            logger.error(f"JSON parsing error: {str(e)}")
-            logger.error(f"Raw output: {recommendations_output}")
-            raise HTTPException(status_code=500, detail="Invalid JSON format in recommendations")
+            raise HTTPException(
+                status_code=404,
+                detail="No recommendation task found in results"
+            )
+
+        except Exception as e:
+            logger.error(f"Error processing recommendations: {str(e)}")
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error processing recommendations: {str(e)}"
+            )
 
     except Exception as e:
-        logger.error(f"Error processing request: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.error(f"Unexpected error: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Unexpected error: {str(e)}"
+        )
     
 if __name__ == "__main__":
     import uvicorn
