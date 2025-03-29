@@ -83,13 +83,12 @@ async def get_learning_recommendations(data: UserInput):
         )
 
         try:
-            result = await asyncio.wait_for(
-                learning_crew.kickoff(),
-                timeout=5000
-            )
+            # Remove await since kickoff() is not a coroutine
+            result = learning_crew.kickoff()
             logger.info(f"Crew result: {result}")
-        except asyncio.TimeoutError:
-            raise HTTPException(status_code=504, detail="Processing timed out")
+        except Exception as e:
+            logger.error(f"Error during crew execution: {str(e)}")
+            raise HTTPException(status_code=500, detail=f"Error during processing: {str(e)}")
 
         # Process recommendations
         recommendations_output = None
@@ -116,4 +115,9 @@ async def get_learning_recommendations(data: UserInput):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(
+        app, 
+        host="0.0.0.0", 
+        port=8000,
+        timeout_keep_alive=120  # 2 minutes timeout
+    )
