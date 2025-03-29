@@ -148,7 +148,7 @@ class LearningAgents():
             Prioritize the highest-rated resources and present them in a clear, concise, and user-friendly format.
             """,
             agent=self.recommendation_agent(),
-            expected_output="A final list of recommended learning resources with ratings and justifications, presented in a user-friendly format.",
+            expected_output="A final list of recommended learning resources with descriptions, ratings and justifications, presented in a user-friendly format.",
         )
 
 if __name__ == "__main__":
