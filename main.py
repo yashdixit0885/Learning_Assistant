@@ -82,14 +82,14 @@ async def get_learning_recommendations(data: UserInput):
             verbose=True
         )
 
-        try:
-            result = await asyncio.wait_for(
-                learning_crew.kickoff(),
-                timeout=25.0
-            )
-            logger.info(f"Crew result: {result}")
-        except asyncio.TimeoutError:
-            raise HTTPException(status_code=504, detail="Processing timed out")
+        # try:
+        #     result = await asyncio.wait_for(
+        #         learning_crew.kickoff(),
+        #         timeout=25.0
+        #     )
+        #     logger.info(f"Crew result: {result}")
+        # except asyncio.TimeoutError:
+        #     raise HTTPException(status_code=504, detail="Processing timed out")
 
         # Process recommendations
         recommendations_output = None
