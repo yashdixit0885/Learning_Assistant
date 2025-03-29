@@ -46,13 +46,13 @@ if st.button("Get Recommendations"):
 
                             if title and link:
                                 st.subheader(title)
-                                st.write(f"**Description:** {description}")
-                                st.write(f"**Link:** [{link}]({link})") # Create a clickable link
+                                st.write(f"**Description:** {description}\n")
+                                st.write(f"**Link:** [{link}]({link}\n)") # Create a clickable link
                                 if rating:
-                                    st.write(f"**Rating:** {rating}")
+                                    st.write(f"**Rating:** {rating}\n")
                                 if justification:
-                                    st.write(f"**Justification:** {justification}")
-                                st.markdown("---") # Add a separator
+                                    st.write(f"**Justification:** {justification}\n")
+                            st.markdown("---") # Add a separator
         else:
             st.error("No recommendations found in the response.")
 
