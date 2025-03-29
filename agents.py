@@ -1,3 +1,4 @@
+# agents.py
 import warnings
 warnings.filterwarnings('ignore') # Ignore warnings
 
@@ -49,9 +50,9 @@ class LearningAgents():
                 )
             ],
         )
-    
+
     def resource_searcher_agent(self):
-        
+
         return Agent(
             role='Learning Resource Searcher',
             goal='Find relevant and high-quality learning resources (courses, articles, videos, etc.) on the web based on the user\'s interests and goals.',
@@ -88,7 +89,7 @@ class LearningAgents():
             ],
             # We might add tools for more advanced evaluation later (e.g., accessing user reviews)
         )
-    
+
     def recommendation_agent(self):
         return Agent(
             role='Learning Path Recommendation Specialist',
@@ -107,12 +108,12 @@ class LearningAgents():
                 )
             ],
         )
-        
+
     def define_interest_analysis_task(self, user_input):
         return Task(
             description=f"""
-            Analyze the user's input: '{user_input}'. 
-            Identify their learning interests, goals, and current knowledge level. 
+            Analyze the user's input: '{user_input}'.
+            Identify their learning interests, goals, and current knowledge level.
             Provide a clear summary of their learning needs.
             """,
             agent=self.interest_analyzer_agent(),
@@ -145,45 +146,9 @@ class LearningAgents():
         return Task(
             description=f"""
             Compile a personalized list of learning resources based on the following evaluated resources: '{evaluated_resources}'.
-            Prioritize the highest-rated resources and present them in a clear, concise, and user-friendly format.
+            Prioritize the highest-rated resources and present them as a JSON-like structure (list of dictionaries) with keys: "title", "description", "link", "rating", "justification".
             """,
             agent=self.recommendation_agent(),
-            expected_output="A final list of recommended learning resources with descriptions, ratings and justifications, presented in a user-friendly format.",
+            expected_output="A JSON-like list of recommended learning resources.",
         )
 
-if __name__ == "__main__":
-    learning_agents = LearningAgents()
-
-    # User input (replace with actual user input later)
-    user_input = input("What do you want to learn? Please describe your interests, goals, and current knowledge: ")
-
-    # Define tasks
-    interest_analysis_task = learning_agents.define_interest_analysis_task(user_input)
-    resource_search_task = learning_agents.define_resource_search_task("user interests summary") # Replace with actual output from interest analysis
-    resource_evaluation_task = learning_agents.define_resource_evaluation_task("list of resources") # Replace with actual output from resource search
-    recommendation_task = learning_agents.define_recommendation_task("evaluated resources") # Replace with actual output from resource evaluation
-
-    # Create the crew
-    learning_crew = Crew(
-        agents=[
-            learning_agents.interest_analyzer_agent(),
-            learning_agents.resource_searcher_agent(),
-            learning_agents.resource_evaluator_agent(),
-            learning_agents.recommendation_agent()
-        ],
-        tasks=[
-            interest_analysis_task,
-            resource_search_task,
-            resource_evaluation_task,
-            recommendation_task
-        ],
-        process=Process.sequential,  # Tasks will be executed in order
-        verbose=True  # To see what's happening
-    )
-
-    # Run the crew
-    recommendations = learning_crew.kickoff()
-
-    # Print the final output
-    print("\nFinal Learning Resource Recommendations:")
-    print(recommendations)
