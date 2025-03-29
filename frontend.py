@@ -37,7 +37,7 @@ if st.button("Get Recommendations", type="primary"):
             response = requests.post(
                 backend_url,
                 json={"user_input": user_input},
-                timeout=30
+                timeout=130
             )
             response.raise_for_status()
             recommendations = response.json()
