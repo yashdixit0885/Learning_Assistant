@@ -1,153 +1,126 @@
-from fastapi import FastAPI, Body
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from agents import LearningAgents
-from crewai import Crew, Process
-from pydantic import BaseModel
-from typing import List, Optional
-import json
+import warnings
+import logging
+import os
+import sys
+from crewai import Agent, Task, Crew, Process, LLM
+from dotenv import load_dotenv
+import google.generativeai as genai
+from crewai_tools import SerperDevTool
 
-# Define Pydantic models for response validation
-class Resource(BaseModel):
-    title: str
-    description: Optional[str] = ""
-    link: Optional[str] = ""
-    rating: Optional[str] = ""
-    justification: Optional[str] = ""
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-class RecommendationsResponse(BaseModel):
-    recommendations: List[Resource]
+# Suppress warnings and stderr
+warnings.filterwarnings('ignore')
+sys.stderr = open(os.devnull, 'w')
 
-# Initialize FastAPI app
-app = FastAPI()
+class LearningAgents:
+    def __init__(self):
+        self.llm = self._initialize_llm()
+        self._configure_gemini()
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Initialize learning agents
-learning_agents = LearningAgents()
-
-@app.exception_handler(Exception)
-async def global_exception_handler(request, exc):
-    print(f"Error occurred: {str(exc)}")
-    return JSONResponse(
-        status_code=500,
-        content={"error": str(exc)}
-    )
-
-@app.post("/recommendations/")
-async def get_learning_recommendations(user_input: str = Body(embed=True)):
-    """
-    Receives user input and returns learning resource recommendations.
-    """
-    print(f"Received user input: {user_input}")
-
-    # Define tasks
-    interest_analysis_task = learning_agents.define_interest_analysis_task(user_input)
-    resource_search_task = learning_agents.define_resource_search_task("user interests summary")
-    resource_evaluation_task = learning_agents.define_resource_evaluation_task("list of resources")
-    recommendation_task = learning_agents.define_recommendation_task("evaluated resources")
-
-    # Create the crew
-    learning_crew = Crew(
-        agents=[
-            learning_agents.interest_analyzer_agent(),
-            learning_agents.resource_searcher_agent(),
-            learning_agents.resource_evaluator_agent(),
-            learning_agents.recommendation_agent()
-        ],
-        tasks=[
-            interest_analysis_task,
-            resource_search_task,
-            resource_evaluation_task,
-            recommendation_task
-        ],
-        process=Process.sequential,
-        verbose=True
-    )
-
-    # Run the crew
-    result = learning_crew.kickoff()
-    print(f"Crew result: {result}")
-
-    # Find the output of the recommendation task
-    recommendations_output = None
-    for task in learning_crew.tasks:
-        print(f"Task description: {task.description}")
-        print(f"Task output: {task.output}")
-        if task.description.startswith("Compile a personalized list of learning resources"):
-            recommendations_output = task.output
-            break
-
-    if recommendations_output is None:
-        print("Warning: No recommendation task output found")
-        return {"error": "No recommendations generated"}
-
-    print(f"Raw recommendations_output: {recommendations_output}")
-
-    structured_recommendations = []
-    if recommendations_output:
+    def _initialize_llm(self):
         try:
-            # First try parsing as JSON
-            structured_recommendations = json.loads(recommendations_output)
-            print(f"Parsed JSON structure: {type(structured_recommendations)}")
-            
-            if not isinstance(structured_recommendations, list):
-                print(f"Unexpected JSON structure: {structured_recommendations}")
-                if isinstance(structured_recommendations, dict):
-                    structured_recommendations = [structured_recommendations]
-                else:
-                    raise ValueError("Invalid JSON structure")
+            return LLM(
+                model="gemini/gemini-2.0-flash",
+                temperature=0.7,
+                max_tokens=1000,
+            )
+        except Exception as e:
+            logger.error(f"Failed to initialize LLM: {e}")
+            return None
 
-        except (json.JSONDecodeError, ValueError) as e:
-            print(f"Parsing error: {e}")
-            print("Falling back to text parsing")
-            resources = recommendations_output.split("\n\n")
-            for resource in resources:
-                if not resource.strip():
-                    continue
-                
-                lines = resource.split("\n")
-                current_resource = {
-                    "title": "",
-                    "description": "",
-                    "link": "",
-                    "rating": "",
-                    "justification": ""
-                }
-                
-                for line in lines:
-                    line = line.strip()
-                    if line.startswith("Title:"):
-                        current_resource["title"] = line[6:].strip()
-                    elif line.startswith("Description:"):
-                        current_resource["description"] = line[12:].strip()
-                    elif line.startswith("Link:"):
-                        current_resource["link"] = line[5:].strip()
-                    elif line.startswith("Rating:"):
-                        current_resource["rating"] = line[7:].strip()
-                    elif line.startswith("Justification:"):
-                        current_resource["justification"] = line[14:].strip()
-                
-                if current_resource["title"] or current_resource["description"]:
-                    structured_recommendations.append(current_resource)
+    def _configure_gemini(self):
+        load_dotenv()
+        gemini_api_key = os.getenv("GEMINI_API_KEY")
+        if not gemini_api_key:
+            logger.warning("GEMINI_API_KEY not found in environment variables")
+        else:
+            genai.configure(api_key=gemini_api_key)
+            self.gemini_llm = genai.GenerativeModel("gemini-pro")
 
-    print(f"Final structured recommendations: {structured_recommendations}")
-    
-    try:
-        # Validate response using Pydantic model
-        response = RecommendationsResponse(recommendations=structured_recommendations)
-        return response.dict()
-    except Exception as e:
-        print(f"Error validating response: {e}")
-        return {"error": "Invalid response structure", "details": str(e)}
+    def _create_search_tool(self):
+        return SerperDevTool(
+            name="Google Search",
+            description="Search for learning resources",
+            search_engine="Google",
+            max_results=5,
+            verbose=True
+        )
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    def interest_analyzer_agent(self):
+        if not self.llm:
+            raise RuntimeError("LLM not properly initialized")
+        
+        return Agent(
+            role='Learning Interest Analyst',
+            goal='Understand user learning interests and provide effective recommendations.',
+            backstory="""You are an expert in identifying learning needs and preferences. You excel at understanding what someone wants to learn and their current level.""",
+            verbose=True,
+            allow_delegation=False,
+            llm=self.llm,
+            tools=[self._create_search_tool()]
+        )
+
+    def resource_searcher_agent(self):
+        return Agent(
+            role='Learning Resource Searcher',
+            goal='Find relevant and high-quality learning resources based on user interests.',
+            backstory="""You are a skilled research assistant specializing in finding educational content online.""",
+            verbose=True,
+            allow_delegation=False,
+            llm=self.llm,
+            tools=[self._create_search_tool()]
+        )
+
+    def resource_evaluator_agent(self):
+        return Agent(
+            role='Learning Resource Evaluator',
+            goal='Assess resource quality and relevance.',
+            backstory="""You are a meticulous evaluator of educational content with a keen eye for quality.""",
+            verbose=True,
+            allow_delegation=False,
+            llm=self.llm,
+            tools=[self._create_search_tool()]
+        )
+
+    def recommendation_agent(self):
+        return Agent(
+            role='Learning Path Recommendation Specialist',
+            goal='Create personalized learning resource lists.',
+            backstory="""You are an organized learning curator who excels at creating clear, actionable recommendations.""",
+            verbose=True,
+            allow_delegation=False,
+            llm=self.llm,
+            tools=[self._create_search_tool()]
+        )
+
+    def define_interest_analysis_task(self, user_input):
+        return Task(
+            description=f"Analyze user input: '{user_input}'. Identify interests, goals, and knowledge level.",
+            agent=self.interest_analyzer_agent(),
+            expected_output="A concise summary of learning needs."
+        )
+
+    def define_resource_search_task(self, interests_summary):
+        return Task(
+            description=f"Find resources based on: '{interests_summary}'. Include varied content types.",
+            agent=self.resource_searcher_agent(),
+            expected_output="List of 5 relevant resources with details."
+        )
+
+    def define_resource_evaluation_task(self, resources):
+        return Task(
+            description=f"Evaluate resources: '{resources}'. Consider credibility and relevance.",
+            agent=self.resource_evaluator_agent(),
+            expected_output="Evaluation with ratings and justifications."
+        )
+
+    def define_recommendation_task(self, evaluated_resources):
+        return Task(
+            description=f"""Create JSON array from: '{evaluated_resources}'. 
+            Include title, description, link, rating, justification for each resource.""",
+            agent=self.recommendation_agent(),
+            expected_output="JSON formatted resource recommendations."
+        )
