@@ -131,7 +131,7 @@ if st.button("Get Recommendations", type="primary"):
             }
             
             # Make API request
-            backend_url = "http://localhost:8000/recommendations/"
+            backend_url = "https://learning-assistant-a8hc.onrender.com/recommendations/"
             response = requests.post(
                 backend_url,
                 json=payload,
