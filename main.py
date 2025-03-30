@@ -33,6 +33,12 @@ class UserInput(BaseModel):
     user_input: str
     domains: List[str]
     preferences: UserPreferences
+    
+# Pydantic model for feedback input
+class FeedbackInput(BaseModel):
+    user_id: str
+    resource_id: str
+    feedback: str  # "helpful", "not_relevant", etc.
 
 # Initialize FastAPI app
 app = FastAPI(title="Learning Assistant API")
@@ -48,6 +54,26 @@ app.add_middleware(
 
 # Initialize learning agents
 learning_agents = LearningAgents()
+
+@app.post("/feedback/")
+def submit_feedback(data: FeedbackInput):
+    """
+    Endpoint to collect resource feedback from users.
+    """
+    try:
+        result = learning_agents.feedback_collector_agent(
+            resource_id=data.resource_id,
+            feedback=data.feedback,
+            user_id=data.user_id
+        )
+        return result
+    except Exception as e:
+        logger.error(f"Failed to process feedback: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing feedback: {str(e)}"
+        )
+
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request, exc):

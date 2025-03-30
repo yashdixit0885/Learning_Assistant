@@ -19,6 +19,7 @@ sys.stderr = open(os.devnull, 'w')
 class LearningAgents:
     def __init__(self):
         self.llm = self._initialize_llm()
+        self.feedback_data = []
         with contextlib.redirect_stderr(open(os.devnull, 'w')):
             self._configure_gemini()
 
@@ -176,3 +177,24 @@ class LearningAgents:
             agent=self.learning_path_creator_agent(),
             expected_output="Structured learning path with prerequisites and timeline"
         )
+    
+    def feedback_collector_agent(self, resource_id: str, feedback: str, user_id: str):
+        """
+        Agent to collect and store feedback on a given resource.
+        For now, we simply store in memory. In production, consider a DB.
+        """
+        logger.info(f"Collecting feedback '{feedback}' for resource {resource_id} from user {user_id}")
+        
+        # Simple in-memory record
+        record = {
+            "resource_id": resource_id,
+            "feedback": feedback,
+            "user_id": user_id
+        }
+        self.feedback_data.append(record)
+        
+        # Optionally, you could process the feedback to adjust agent parameters,
+        # run analysis on common user issues, or prompt the LLM to revise future suggestions.
+        # e.g. self.llm.modify_preference_model(record)
+
+        return {"status": "Feedback stored", "record": record}

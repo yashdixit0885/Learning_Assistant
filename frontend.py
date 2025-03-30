@@ -1,7 +1,7 @@
+# Learning Assistant Frontend
 import streamlit as st
 import requests
 import json
-import time
 
 # Page configuration
 st.set_page_config(
@@ -10,6 +10,33 @@ st.set_page_config(
     layout="wide"
 )
 
+# Maintain local feedback history in session state
+if "feedback_history" not in st.session_state:
+    st.session_state["feedback_history"] = []
+
+if "user_id" not in st.session_state:
+    st.session_state["user_id"] = ""
+
+def store_feedback_local_and_remote(resource_id: str, feedback: str, idx: int):
+    """
+    Stores feedback locally in session state, then sends it to the backend.
+    """
+    st.session_state["feedback_history"].append({
+        "resource_id": resource_id,
+        "feedback": feedback
+    })
+    user_id = st.session_state["user_id"] or "anonymous"
+    payload = {
+        "user_id": user_id,
+        "resource_id": resource_id,
+        "feedback": feedback
+    }
+    try:
+        requests.post("http://localhost:8000/feedback/", json=payload)
+        st.toast(f"Feedback for item #{idx} submitted by {user_id}!")
+    except:
+        st.toast("Could not send feedback to backend.")
+
 # Title and description
 st.title("🎓 Learning Assistant")
 st.markdown("""
@@ -17,25 +44,25 @@ This tool helps you find personalized learning resources based on your interests
 Just describe what you'd like to learn, and we'll do the rest!
 """)
 
-# Add sidebar for filters and preferences
+# Sidebar preferences
 with st.sidebar:
-    st.header("Preferences")
-    
-    # Resource type filter
+    st.header("User Info & Preferences")
+    # Let the user specify their own user ID
+    st.session_state["user_id"] = st.text_input(
+        label="User ID",
+        value=st.session_state["user_id"],
+        placeholder="Enter your unique user ID"
+    )
     resource_types = st.multiselect(
         "Resource Types",
         ["Videos", "Articles", "Courses", "Books", "Interactive"],
         default=["Videos", "Articles", "Courses"]
     )
-    
-    # Difficulty level
     difficulty = st.select_slider(
         "Preferred Difficulty",
         options=["Beginner", "Intermediate", "Advanced"],
         value="Beginner"
     )
-    
-    # Time commitment
     max_time = st.slider(
         "Maximum Time Commitment (hours/week)",
         min_value=1,
@@ -43,13 +70,13 @@ with st.sidebar:
         value=5
     )
 
-# Modify the user input section
+# User input area
 with st.container():
     col1, col2 = st.columns([2, 1])
     with col1:
         user_input = st.text_area(
             "Enter your learning interests, goals, and current knowledge:",
-            placeholder="e.g., Interested in Python programming, want to learn about data analysis, currently know basic syntax.",
+            placeholder="e.g., Interested in Python programming, want to learn data analysis...",
             height=150
         )
     with col2:
@@ -61,15 +88,14 @@ with st.container():
         )
 
 def display_resource(idx, resource):
-    """Helper function to display a single resource"""
+    """Helper function to display a single resource."""
     with st.container():
         col1, col2 = st.columns([3, 1])
-        
         with col1:
             st.markdown(f"### {idx}. {resource.get('title', 'Untitled')}")
             
-            # Display description without JSON formatting
-            description = resource.get('description', 'No description available')
+            # Clean up description
+            description = resource.get('description', 'No description')
             if description.startswith('```json'):
                 description = "No description available"
             st.markdown(f"**Description:** {description}")
@@ -81,7 +107,7 @@ def display_resource(idx, resource):
                 with st.expander("Why this resource?"):
                     st.write(justification)
             
-            # Add resource metadata
+            # Meta information
             meta_col1, meta_col2, meta_col3 = st.columns(3)
             with meta_col1:
                 st.caption(f"Type: {resource.get('type', 'N/A')}")
@@ -89,101 +115,92 @@ def display_resource(idx, resource):
                 st.caption(f"Duration: {resource.get('duration', 'N/A')}")
             with meta_col3:
                 st.caption(f"Difficulty: {resource.get('difficulty', 'N/A')}")
-            
-            # Add feedback buttons
+
+            # Feedback buttons
             feedback_col1, feedback_col2, feedback_col3 = st.columns(3)
             with feedback_col1:
                 if st.button(f"👍 Helpful #{idx}"):
-                    st.toast("Thank you for your feedback!")
+                    store_feedback_local_and_remote(resource.get("id", f"resource_{idx}"), "helpful", idx)
             with feedback_col2:
                 if st.button(f"🔖 Save #{idx}"):
-                    st.toast("Resource saved!")
+                    st.toast("Resource saved locally (unimplemented behavior).")
             with feedback_col3:
                 if st.button(f"👎 Not relevant #{idx}"):
-                    st.toast("Thanks for letting us know!")
-        
+                    store_feedback_local_and_remote(resource.get("id", f"resource_{idx}"), "not_relevant", idx)
+
         with col2:
             if rating := resource.get('rating'):
-                if isinstance(rating, (int, float)):
-                    st.info(f"Rating: {'⭐' * int(rating)}")
-                else:
+                try:
+                    # If rating can be converted to int
+                    int_rating = int(float(rating))
+                    st.info(f"Rating: {'⭐' * int_rating}")
+                except:
                     st.info(f"Rating: {rating}")
-        
+
         st.markdown("---")
 
-# Process button
+# Recommendation request
 if st.button("Get Recommendations", type="primary"):
     if not user_input.strip():
         st.error("Please enter your learning interests before submitting.")
         st.stop()
 
     with st.spinner("🔍 Analyzing your interests and finding the best learning resources..."):
-        try:
-            # Prepare request payload with all preferences
-            payload = {
-                "user_input": user_input,
-                "domains": selected_tags,  # Add selected domains/tags
-                "preferences": {
-                    "resource_types": resource_types,
-                    "difficulty": difficulty,
-                    "max_time": max_time
-                }
+        # Prepare request payload
+        payload = {
+            "user_input": user_input,
+            "domains": selected_tags,
+            "preferences": {
+                "resource_types": resource_types,
+                "difficulty": difficulty,
+                "max_time": max_time
             }
-            
-            # Make API request
-            backend_url = "https://learning-assistant-a8hc.onrender.com/recommendations/"
-            response = requests.post(
-                backend_url,
-                json=payload,
-                timeout=130
-            )
+        }
+        
+        # Make API request
+        try:
+            backend_url = "http://localhost:8000/recommendations/"
+            response = requests.post(backend_url, json=payload, timeout=130)
             response.raise_for_status()
             recommendations = response.json()
 
-            # Debug information (hidden by default)
+            # Debug info
             with st.expander("🔧 Debug Information"):
                 st.code(json.dumps(recommendations, indent=2))
 
-            # Display recommendations
+            # Display results
             if "recommendations" in recommendations and recommendations["recommendations"]:
-                st.success("✨ Found relevant learning resources for you!")
-                
-                for idx, resource in enumerate(recommendations["recommendations"], 1):
+                st.success("✨ Found relevant learning resources!")
+                for idx, res_item in enumerate(recommendations["recommendations"], 1):
                     try:
-                        # Get description and clean it up
-                        description = resource.get('description', '')
+                        description = res_item.get('description', '')
                         if description.startswith('```json'):
-                            # Extract JSON content between backticks and clean it
+                            # Attempt to parse embedded JSON
                             json_str = description.split('```json')[1].split('```')[0].strip()
-                            # Clean up any potential formatting issues
                             json_str = json_str.replace('\n', ' ').replace('\r', '')
                             parsed_resources = json.loads(json_str)
-                            
+
                             if isinstance(parsed_resources, list):
                                 for parsed_idx, parsed_resource in enumerate(parsed_resources, idx):
                                     display_resource(parsed_idx, parsed_resource)
                             else:
                                 display_resource(idx, parsed_resources)
                         else:
-                            display_resource(idx, resource)
-                            
-                    except json.JSONDecodeError as e:
+                            display_resource(idx, res_item)
+                    except json.JSONDecodeError:
                         st.warning(f"Could not parse recommendation {idx}. Displaying as plain text.")
-                        display_resource(idx, resource)
+                        display_resource(idx, res_item)
                     except Exception as e:
                         st.error(f"Error processing recommendation {idx}: {str(e)}")
-                        continue
-
+            else:
+                st.warning("No recommendations found.")
+                
         except requests.Timeout:
             st.error("⏱️ Request timed out. Please try again.")
         except requests.RequestException as e:
             st.error(f"❌ Error fetching recommendations: {str(e)}")
-            st.info("Please try again in a few moments.")
         except Exception as e:
             st.error(f"❌ Unexpected error: {str(e)}")
-            st.info("Please try again or contact support if the issue persists.")
-
-
 
 # Footer
 st.markdown("---")
