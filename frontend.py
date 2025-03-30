@@ -17,12 +17,48 @@ This tool helps you find personalized learning resources based on your interests
 Just describe what you'd like to learn, and we'll do the rest!
 """)
 
-# User input
-user_input = st.text_area(
-    "Enter your learning interests, goals, and current knowledge:",
-    placeholder="e.g., Interested in Python programming, want to learn about data analysis, currently know basic syntax.",
-    height=150
-)
+# Add sidebar for filters and preferences
+with st.sidebar:
+    st.header("Preferences")
+    
+    # Resource type filter
+    resource_types = st.multiselect(
+        "Resource Types",
+        ["Videos", "Articles", "Courses", "Books", "Interactive"],
+        default=["Videos", "Articles", "Courses"]
+    )
+    
+    # Difficulty level
+    difficulty = st.select_slider(
+        "Preferred Difficulty",
+        options=["Beginner", "Intermediate", "Advanced"],
+        value="Beginner"
+    )
+    
+    # Time commitment
+    max_time = st.slider(
+        "Maximum Time Commitment (hours/week)",
+        min_value=1,
+        max_value=20,
+        value=5
+    )
+
+# Modify the user input section
+with st.container():
+    col1, col2 = st.columns([2, 1])
+    with col1:
+        user_input = st.text_area(
+            "Enter your learning interests, goals, and current knowledge:",
+            placeholder="e.g., Interested in Python programming, want to learn about data analysis, currently know basic syntax.",
+            height=150
+        )
+    with col2:
+        st.markdown("### Quick Tags")
+        selected_tags = st.multiselect(
+            "",
+            ["Programming", "Data Science", "Web Development", "AI/ML", "DevOps"],
+            placeholder="Select relevant areas"
+        )
 
 def display_resource(idx, resource):
     """Helper function to display a single resource"""
@@ -44,6 +80,27 @@ def display_resource(idx, resource):
             if justification := resource.get('justification'):
                 with st.expander("Why this resource?"):
                     st.write(justification)
+            
+            # Add resource metadata
+            meta_col1, meta_col2, meta_col3 = st.columns(3)
+            with meta_col1:
+                st.caption(f"Type: {resource.get('type', 'N/A')}")
+            with meta_col2:
+                st.caption(f"Duration: {resource.get('duration', 'N/A')}")
+            with meta_col3:
+                st.caption(f"Difficulty: {resource.get('difficulty', 'N/A')}")
+            
+            # Add feedback buttons
+            feedback_col1, feedback_col2, feedback_col3 = st.columns(3)
+            with feedback_col1:
+                if st.button(f"👍 Helpful #{idx}"):
+                    st.toast("Thank you for your feedback!")
+            with feedback_col2:
+                if st.button(f"🔖 Save #{idx}"):
+                    st.toast("Resource saved!")
+            with feedback_col3:
+                if st.button(f"👎 Not relevant #{idx}"):
+                    st.toast("Thanks for letting us know!")
         
         with col2:
             if rating := resource.get('rating'):
@@ -62,11 +119,22 @@ if st.button("Get Recommendations", type="primary"):
 
     with st.spinner("🔍 Analyzing your interests and finding the best learning resources..."):
         try:
+            # Prepare request payload with all preferences
+            payload = {
+                "user_input": user_input,
+                "domains": selected_tags,  # Add selected domains/tags
+                "preferences": {
+                    "resource_types": resource_types,
+                    "difficulty": difficulty,
+                    "max_time": max_time
+                }
+            }
+            
             # Make API request
             backend_url = "https://learning-assistant-a8hc.onrender.com/recommendations/"
             response = requests.post(
                 backend_url,
-                json={"user_input": user_input},
+                json=payload,
                 timeout=130
             )
             response.raise_for_status()

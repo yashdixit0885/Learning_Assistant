@@ -24,8 +24,15 @@ class Resource(BaseModel):
 class RecommendationsResponse(BaseModel):
     recommendations: List[Resource]
 
+class UserPreferences(BaseModel):
+    resource_types: List[str]
+    difficulty: str
+    max_time: int
+
 class UserInput(BaseModel):
     user_input: str
+    domains: List[str]
+    preferences: UserPreferences
 
 # Initialize FastAPI app
 app = FastAPI(title="Learning Assistant API")
@@ -53,30 +60,41 @@ async def global_exception_handler(request, exc):
 @app.post("/recommendations/", response_model=RecommendationsResponse)
 async def get_learning_recommendations(data: UserInput):
     try:
-        logger.info(f"Received request with input: {data.user_input}")
+        logger.info(f"Received request with input: {data}")
         
         if not data.user_input.strip():
             raise HTTPException(status_code=400, detail="User input cannot be empty")
 
-        # Define tasks
+        # Create domain-specific agents for selected domains
+        domain_agents = [
+            learning_agents.domain_specialist_agent(domain)
+            for domain in data.domains
+        ]
+
+        # Define tasks with user preferences
         interest_analysis_task = learning_agents.define_interest_analysis_task(data.user_input)
         resource_search_task = learning_agents.define_resource_search_task("user interests summary")
         resource_evaluation_task = learning_agents.define_resource_evaluation_task("list of resources")
-        recommendation_task = learning_agents.define_recommendation_task("evaluated resources")
+        learning_path_task = learning_agents.define_learning_path_task(
+            "interests summary",
+            data.preferences.difficulty,
+            data.preferences.max_time
+        )
 
-        # Create and run crew
+        # Create and run crew with domain specialists
         learning_crew = Crew(
             agents=[
                 learning_agents.interest_analyzer_agent(),
                 learning_agents.resource_searcher_agent(),
                 learning_agents.resource_evaluator_agent(),
-                learning_agents.recommendation_agent()
+                learning_agents.recommendation_agent(),
+                *domain_agents  # Add domain-specific agents
             ],
             tasks=[
                 interest_analysis_task,
                 resource_search_task,
                 resource_evaluation_task,
-                recommendation_task
+                learning_path_task
             ],
             process=Process.sequential,
             verbose=True
