@@ -8,6 +8,7 @@ import json
 import asyncio
 from agents import LearningAgents
 from crewai import Crew, Process
+from models import init_db, SessionLocal, Feedback  # import your DB objects
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -42,6 +43,8 @@ class FeedbackInput(BaseModel):
 
 # Initialize FastAPI app
 app = FastAPI(title="Learning Assistant API")
+init_db()  # Initialize the database
+
 
 # Add CORS middleware
 app.add_middleware(
@@ -60,19 +63,33 @@ def submit_feedback(data: FeedbackInput):
     """
     Endpoint to collect resource feedback from users.
     """
+    db = SessionLocal()
     try:
-        result = learning_agents.feedback_collector_agent(
+        # Create a new Feedback row
+        feedback_entry = Feedback(
+            user_id=data.user_id,
             resource_id=data.resource_id,
-            feedback=data.feedback,
-            user_id=data.user_id
+            feedback=data.feedback
         )
-        return result
+        db.add(feedback_entry)
+        db.commit()
+        db.refresh(feedback_entry)
+
+        return {"status": "Feedback stored", "record": {
+            "id": feedback_entry.id,
+            "user_id": feedback_entry.user_id,
+            "resource_id": feedback_entry.resource_id,
+            "feedback": feedback_entry.feedback
+        }}
     except Exception as e:
+        db.rollback()
         logger.error(f"Failed to process feedback: {str(e)}")
         raise HTTPException(
             status_code=500,
             detail=f"Error processing feedback: {str(e)}"
         )
+    finally:
+        db.close()
 
 
 @app.exception_handler(Exception)
