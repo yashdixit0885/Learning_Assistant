@@ -75,6 +75,7 @@ async def get_learning_recommendations(data: UserInput):
         interest_analysis_task = learning_agents.define_interest_analysis_task(data.user_input)
         resource_search_task = learning_agents.define_resource_search_task("user interests summary")
         resource_evaluation_task = learning_agents.define_resource_evaluation_task("list of resources")
+        recommendation_task = learning_agents.define_recommendation_task("evaluated resources")
         learning_path_task = learning_agents.define_learning_path_task(
             "interests summary",
             data.preferences.difficulty,
@@ -94,6 +95,7 @@ async def get_learning_recommendations(data: UserInput):
                 interest_analysis_task,
                 resource_search_task,
                 resource_evaluation_task,
+                recommendation_task,
                 learning_path_task
             ],
             process=Process.sequential,

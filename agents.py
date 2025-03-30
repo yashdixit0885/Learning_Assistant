@@ -6,6 +6,7 @@ from crewai import Agent, Task, Crew, Process, LLM
 from dotenv import load_dotenv
 import google.generativeai as genai
 from crewai_tools import SerperDevTool
+import contextlib
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -18,9 +19,11 @@ sys.stderr = open(os.devnull, 'w')
 class LearningAgents:
     def __init__(self):
         self.llm = self._initialize_llm()
-        self._configure_gemini()
+        with contextlib.redirect_stderr(open(os.devnull, 'w')):
+            self._configure_gemini()
 
-    def _initialize_llm(self):
+    def _initialize_llm(self) -> LLM:
+        """Initialize the Gemini LLM with specified parameters."""
         try:
             return LLM(
                 model="gemini/gemini-2.0-flash",
@@ -31,16 +34,22 @@ class LearningAgents:
             logger.error(f"Failed to initialize LLM: {e}")
             return None
 
-    def _configure_gemini(self):
+    def _configure_gemini(self) -> None:
+        """Configure Gemini with environment-provided API key."""
         load_dotenv()
         gemini_api_key = os.getenv("GEMINI_API_KEY")
         if not gemini_api_key:
             logger.warning("GEMINI_API_KEY not found in environment variables")
         else:
-            genai.configure(api_key=gemini_api_key)
-            self.gemini_llm = genai.GenerativeModel("gemini-pro")
+            try:
+                genai.configure(api_key=gemini_api_key)
+                self.gemini_llm = genai.GenerativeModel("gemini-pro")
+                logger.info("Gemini LLM successfully configured.")
+            except Exception as e:
+                logger.error(f"Failed to configure Gemini: {e}")
 
-    def _create_search_tool(self):
+    def _create_search_tool(self) -> SerperDevTool:
+        """Create and configure a SerperDevTool instance for resource searches."""
         return SerperDevTool(
             name="Google Search",
             description="Search for learning resources",
@@ -48,91 +57,85 @@ class LearningAgents:
             max_results=5,
             verbose=True
         )
-
-    def interest_analyzer_agent(self):
-        if not self.llm:
-            raise RuntimeError("LLM not properly initialized")
         
+    def _build_agent(self, role: str, goal: str, backstory: str) -> Agent:
+        """Helper to reduce repetitive agent initialization."""
         return Agent(
-            role='Learning Interest Analyst',
-            goal='Understand user learning interests and provide effective recommendations.',
-            backstory="""You are an expert in identifying learning needs and preferences. You excel at understanding what someone wants to learn and their current level.""",
+            role=role,
+            goal=goal,
+            backstory=backstory,
             verbose=True,
             allow_delegation=False,
             llm=self.llm,
             tools=[self._create_search_tool()]
         )
 
-    def resource_searcher_agent(self):
-        return Agent(
+    def interest_analyzer_agent(self) -> Agent:
+        """Creates an agent to analyze user learning interests."""
+        if not self.llm:
+            raise RuntimeError("LLM not properly initialized")
+        return self._build_agent(
+            role='Learning Interest Analyst',
+            goal='Understand user learning interests and provide effective recommendations.',
+            backstory="""You are an expert in identifying learning needs and preferences.
+            You excel at understanding what someone wants to learn and their current level."""
+        )
+
+    def resource_searcher_agent(self) -> Agent:
+        """Creates an agent to search for learning resources."""
+        if not self.llm:
+            raise RuntimeError("LLM not properly initialized")
+        return self._build_agent(
             role='Learning Resource Searcher',
             goal='Find relevant and high-quality learning resources based on user interests.',
             backstory="""You are a skilled research assistant specializing in finding educational content online.""",
-            verbose=True,
-            allow_delegation=False,
-            llm=self.llm,
-            tools=[self._create_search_tool()]
-        )
+            )
 
-    def resource_evaluator_agent(self):
-        return Agent(
+    def resource_evaluator_agent(self) -> Agent:
+        """Creates an agent to evaluate learning resources."""
+        if not self.llm:
+            raise RuntimeError("LLM not properly initialized")
+        return self._build_agent(
             role='Learning Resource Evaluator',
             goal='Assess resource quality and relevance.',
             backstory="""You are a meticulous evaluator of educational content with a keen eye for quality.""",
-            verbose=True,
-            allow_delegation=False,
-            llm=self.llm,
-            tools=[self._create_search_tool()]
         )
 
-    def recommendation_agent(self):
-        return Agent(
+    def recommendation_agent(self) -> Agent:
+        """Creates an agent to recommend learning resources."""
+        if not self.llm:
+            raise RuntimeError("LLM not properly initialized")
+        return self._build_agent(
             role='Learning Path Recommendation Specialist',
             goal='Create personalized learning resource lists.',
             backstory="""You are an organized learning curator who excels at creating clear, actionable recommendations.""",
-            verbose=True,
-            allow_delegation=False,
-            llm=self.llm,
-            tools=[self._create_search_tool()]
         )
 
-    def domain_specialist_agent(self, domain):
+    def domain_specialist_agent(self, domain) -> Agent:
         """Creates a specialist agent for specific learning domains"""
-        return Agent(
+        return self._build_agent(
             role=f'{domain} Learning Specialist',
             goal=f'Provide expert guidance in {domain} learning path creation',
             backstory=f"""You are an expert in {domain} education with years of experience 
             in curriculum development and teaching.""",
-            verbose=True,
-            allow_delegation=False,
-            llm=self.llm,
-            tools=[self._create_search_tool()]
         )
 
-    def learning_path_creator_agent(self):
+    def learning_path_creator_agent(self) -> Agent:
         """Creates structured learning paths with prerequisites"""
-        return Agent(
+        return self._build_agent(
             role='Learning Path Architect',
             goal='Create structured learning paths with clear progression',
             backstory="""You are an expert in curriculum design and learning progression. 
             You excel at creating step-by-step learning paths that build upon prerequisites.""",
-            verbose=True,
-            allow_delegation=False,
-            llm=self.llm,
-            tools=[self._create_search_tool()]
         )
 
-    def resource_validator_agent(self):
+    def resource_validator_agent(self) -> Agent:
         """Validates and verifies learning resource quality"""
-        return Agent(
+        return self._build_agent(
             role='Resource Quality Validator',
             goal='Ensure resource quality, freshness, and accuracy',
             backstory="""You are a meticulous validator who ensures learning resources 
             are up-to-date, accurate, and of high quality.""",
-            verbose=True,
-            allow_delegation=False,
-            llm=self.llm,
-            tools=[self._create_search_tool()]
         )
 
     def define_interest_analysis_task(self, user_input):
